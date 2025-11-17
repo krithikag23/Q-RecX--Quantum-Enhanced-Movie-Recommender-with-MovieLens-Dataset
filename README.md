@@ -55,27 +55,3 @@ pip install -r requirements.txt
 
 ---
 
-## 🚀 Future Enhancements
-
-- 🎭 Add more genres (Comedy, Thriller…)
-- 🎞 Movie posters & IMDb trailer links
-- 🧠 Variational quantum circuit embeddings
-- 🔍 Explainability: “Why this movie was recommended”
-- 🌐 Streamlit Cloud deployment
-
----
-
-## 🎯 Purpose
-
-This project demonstrates:
-
-- Practical **Quantum Machine Learning** in a real product
-- Novel **hybrid recommender system architecture**
-- Clean & interactive UI design
-
-📌 Great for:
-Research • Hackathons • Resume • Learning QML
-
----
-
-Made with ❤️, Python 🐍, and Quantum Superposition ⚛️
