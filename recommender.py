@@ -1,47 +1,42 @@
-import numpy as np
 import pandas as pd
-from surprise import Dataset, SVD
-from surprise.model_selection import train_test_split
-
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
 from quantum_model import quantum_similarity
 
-# Load dataset
-data = Dataset.load_builtin('ml-100k')
-trainset, testset = train_test_split(data, test_size=0.2)
+# Real-world dataset auto-download
+URL_RATINGS = "https://files.grouplens.org/datasets/movielens/ml-latest-small/ratings.csv"
+URL_MOVIES = "https://files.grouplens.org/datasets/movielens/ml-latest-small/movies.csv"
 
-# Train classical recommender (Matrix Factorization)
-algo = SVD()
-algo.fit(trainset)
+ratings = pd.read_csv(URL_RATINGS)
+movies = pd.read_csv(URL_MOVIES)
+df = ratings.merge(movies, on="movieId")
 
-
-def get_user_preferences(user_id):
-    """Returns top-rated movies for baseline similarity"""
-    user_ratings = pd.DataFrame(trainset.ur[user_id], columns=["movie_id", "rating"])
-    user_ratings["rating"] = user_ratings["rating"].astype(float)
-    return user_ratings.sort_values("rating", ascending=False).head(5)
-
+# Genre embedding
+genre_dummies = df['genres'].str.get_dummies(sep='|')
+df = pd.concat([df, genre_dummies], axis=1)
 
 def recommend_movies(user_id, top_k=10):
-    all_items = list(set([i for i in trainset.all_items()]))
-    movie_scores = []
+    user_data = df[df['userId'] == user_id]
+    if user_data.empty:
+        return pd.DataFrame()
 
-    # Try predicting each movie for the user (cold start handled later)
-    for movie_inner_id in all_items:
-        movie_raw_id = trainset.to_raw_iid(movie_inner_id)
-        est_rating = algo.predict(trainset.to_raw_uid(user_id), movie_raw_id).est
+    # User preference profile based on liked movies
+    user_profile = user_data[genre_dummies.columns].mean().values.reshape(1, -1)
+    movie_features = df[genre_dummies.columns].values
 
-        # Latent factors as features for quantum similarity
-        try:
-            user_vec = algo.pu[user_id][:2]   # 2D latent features
-            movie_vec = algo.qi[movie_inner_id][:2]
-        except:
-            continue  # skip if missing
+    # Classical cosine similarity
+    df["classical_score"] = cosine_similarity(user_profile, movie_features)[0]
 
-        q_score = quantum_similarity(user_vec, movie_vec)
-        hybrid_score = 0.7 * est_rating + 0.3 * q_score
+    # Quantum similarity based on top 2 genres: Action, Romance
+    q_scores = []
+    for _, row in df.iterrows():
+        user_vec = user_profile[0][:2]  # Action, Romance
+        movie_vec = row[genre_dummies.columns[:2]].values
+        q_scores.append(quantum_similarity(user_vec, movie_vec))
 
-        movie_scores.append((movie_raw_id, est_rating, q_score, hybrid_score))
+    df["quantum_score"] = q_scores
 
-    # Sort by hybrid score
-    sorted_list = sorted(movie_scores, key=lambda x: x[3], reverse=True)
-    return sorted_list[:top_k]
+    # Hybrid score
+    df["final_score"] = 0.7 * df["classical_score"] + 0.3 * df["quantum_score"]
+
+    return df.sort_values("final_score", ascending=False).head(top_k)[["title", "final_score"]]
